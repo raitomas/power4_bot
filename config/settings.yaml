@@ -1,0 +1,56 @@
+# ============================================================
+# Power 4 Trading Bot — Configuración General
+# ============================================================
+
+bot:
+  name: "Power4Bot"
+  version: "1.0.0"
+  mode: "paper"          # "paper" | "live" — SIEMPRE empezar en paper
+  magic_number: 20240001 # ID único del bot para órdenes en MT5
+
+discovery:
+  mode: "market_watch"   # "watchlist" (static YAML) | "market_watch" (all MT5 visible)
+  update_interval_min: 60
+
+risk:
+  capital: 100000.0          # Capital total en USD
+  riesgo_por_op: 0.005        # 0.5% por operación
+  max_posiciones: 5           # Máximo de posiciones simultáneas
+  max_drawdown_kill: 0.08     # Kill switch al -8% de drawdown total
+  stop_buffer_pct: 0.01       # 1% de buffer sobre/bajo el stop de referencia
+  distancia_sl_min: 0.05      # Stop mínimo ~5% del precio
+  distancia_sl_max: 0.09      # Stop máximo ~9% del precio
+
+sma:
+  rapida: 20
+  media: 40
+  lenta: 200
+  umbral_pendiente_positivo: 0.0005   # SMA apunta arriba si slope > este valor
+  umbral_pendiente_negativo: -0.0005  # SMA apunta abajo si slope < este valor
+  umbral_plano: 0.0003                # SMA plana si abs(slope) < este valor
+
+etapas:
+  lookback: 20                # Nº de velas para clasificar etapa
+  min_pct_sobre_sma20: 0.90   # 90% de cierres sobre SMA20 para Etapa 2
+  min_cruces_rango: 3         # Cruces mínimos para detectar rango lateral
+
+patrones:
+  max_dist_sma20_pct: 4.0     # Máx distancia al SMA20 para operar (Barrio Sésamo)
+  min_escalones_pc1_pv1: 3    # Mínimo de escalones para PC1/PV1
+  retroceso_max_123: 0.30     # Máximo retroceso vela 2 en patrón 1-2-3 (30%)
+  lookback_swings: 20         # Velas hacia atrás para buscar swing highs/lows
+
+datos:
+  barras_diario: 1510         # 250 calentamiento SMA200 + 1260 barras test (~5 anos)
+  barras_semanal: 250         # Barras semanales (250 semanas ≈ 5 años, cubre SMA200 W1)
+  cache_dir: "data/"          # Directorio de caché local
+
+scheduler:
+  hora_actualizacion: "22:00"  # Hora de actualización diaria (tras cierre mercado)
+  zona_horaria: "Europe/Madrid"
+
+logging:
+  level: "INFO"               # DEBUG | INFO | WARNING | ERROR
+  archivo: "logs/power4.log"
+  max_bytes: 5242880          # 5 MB por archivo
+  backup_count: 7             # 7 días de logs rotativos

@@ -1,0 +1,33 @@
+# ============================================================
+# Power 4 Trading Bot — Dependencias Python
+# Instalar con: pip install -r requirements.txt
+# ============================================================
+
+# Broker API
+MetaTrader5>=5.0.45         # Solo funciona en Windows
+
+# Datos y análisis
+pandas>=2.0.0
+numpy>=1.24.0
+pyarrow>=12.0.0             # Para guardar Parquet (caché rápida)
+
+# Configuración
+pyyaml>=6.0
+
+# Scheduling (actualización automática diaria)
+APScheduler>=3.10.0
+
+# Dashboard (Fase 7)
+streamlit>=1.28.0
+plotly>=5.17.0
+mplfinance>=0.12.10b0
+
+# Alertas Telegram (opcional)
+# python-telegram-bot>=20.0
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# Logging mejorado (opcional, stdlib es suficiente)
+# loguru>=0.7.0

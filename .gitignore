@@ -1,0 +1,46 @@
+# Credenciales — NUNCA subir al repositorio
+config/mt5_credentials.yaml
+config/settings_local.yaml
+
+# Caché de datos
+data/
+*.parquet
+*.csv
+
+# Logs
+logs/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.coverage
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Diagnostic/Temporary files from debugging
+debug_*.py
+debug_*.txt
+*_report.txt
+debug_res.txt
+backtest_report.txt
+top_performers_report.txt
+walkthrough.md
+implementation_plan.md
+task.md

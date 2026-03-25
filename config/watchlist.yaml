@@ -1,0 +1,103 @@
+# ==========================================================
+# Power 4 Trading Bot - Watchlist  (2 niveles de prioridad)
+# tier_a → escaneo inmediato (~20-60 símbolos prioritarios)
+# tier_b → escaneo segundo plano (resto de interés)
+# Última actualización: 2026-03-24 (Expansión JPY + Índices Globales)
+# ==========================================================
+
+# ──────────────────────────────────────────────────────────
+# TIER A — Prioridad alta (se escanea primero)
+#   · Forex majors & JPY Crosses
+#   · Índices internacionales principales
+#   · Metales & Energía
+#   · ETFs Nasdaq / S&P 500
+#   · Top Megacap / Big Tech
+# ──────────────────────────────────────────────────────────
+tier_a:
+
+  # Forex — Majors
+  - { symbol: EURUSD, name: "Euro vs US Dollar",                 category: major,     tipo: forex }
+  - { symbol: GBPUSD, name: "Pound Sterling vs US Dollar",       category: major,     tipo: forex }
+  - { symbol: USDJPY, name: "US Dollar vs Yen",                  category: major,     tipo: forex }
+  - { symbol: AUDUSD, name: "Australian Dollar vs US Dollar",    category: major,     tipo: forex }
+  - { symbol: USDCAD, name: "US Dollar vs Canadian Dollar",      category: major,     tipo: forex }
+  - { symbol: USDCHF, name: "US Dollar vs Swiss Franc",          category: major,     tipo: forex }
+  - { symbol: NZDUSD, name: "New Zealand Dollar vs US Dollar",   category: major,     tipo: forex }
+
+  # Forex — JPY Crosses (Yen Japonés)
+  - { symbol: EURJPY, name: "Euro vs Yen",                       category: jpy_cross, tipo: forex }
+  - { symbol: GBPJPY, name: "Pound Sterling vs Yen",             category: jpy_cross, tipo: forex }
+  - { symbol: AUDJPY, name: "Australian Dollar vs Yen",          category: jpy_cross, tipo: forex }
+  - { symbol: CADJPY, name: "Canadian Dollar vs Yen",            category: jpy_cross, tipo: forex }
+  - { symbol: CHFJPY, name: "Swiss Franc vs Yen",                category: jpy_cross, tipo: forex }
+  - { symbol: NZDJPY, name: "New Zealand Dollar vs Yen",          category: jpy_cross, tipo: forex }
+
+  # Índices Globales (Los más importantes del mundo)
+  - { symbol: SP500,   name: "S&P 500 (USA)",                    category: index,     tipo: indices }
+  - { symbol: ND100m,  name: "Nasdaq 100 (USA Tech)",            category: index,     tipo: indices }
+  - { symbol: US30,    name: "Dow Jones 30 (USA Blue Chip)",     category: index,     tipo: indices }
+  - { symbol: DE40,    name: "Germany 40 (DAX)",                 category: index,     tipo: indices }
+  - { symbol: STOX50,  name: "Euro Stoxx 50 (Europe)",           category: index,     tipo: indices }
+  - { symbol: UK100,   name: "UK 100 (FTSE)",                    category: index,     tipo: indices }
+  - { symbol: FRA40,   name: "France 40 (CAC)",                  category: index,     tipo: indices }
+  - { symbol: ESP35,   name: "Spain 35 (IBEX)",                  category: index,     tipo: indices }
+  - { symbol: IT40,    name: "Italy 40 (FTSE MIB)",              category: index,     tipo: indices }
+  - { symbol: NI225,   name: "Nikkei 225 (Japan)",               category: index,     tipo: indices }
+  - { symbol: HK50,    name: "Hang Seng (Hong Kong)",            category: index,     tipo: indices }
+  - { symbol: AUS200,  name: "Australia 200",                    category: index,     tipo: indices }
+  - { symbol: CHINA50, name: "China A50",                        category: index,     tipo: indices }
+
+  # Metales & Energía
+  - { symbol: XAUUSD, name: "Gold vs US Dollar",                 category: metal,     tipo: metales }
+  - { symbol: XAGUSD, name: "Silver vs US Dollar",               category: metal,     tipo: metales }
+  - { symbol: WTI,    name: "WTI Crude Oil",                     category: energy,    tipo: energia }
+  - { symbol: BRENT,  name: "Brent Crude Oil",                   category: energy,    tipo: energia }
+
+  # ETFs — Principales
+  - { symbol: SPY,    name: "SPDR S&P 500 ETF Trust",            category: etf,       tipo: etf }
+  - { symbol: QQQ,    name: "Invesco QQQ Trust",                 category: etf,       tipo: etf }
+  - { symbol: TQQQ,   name: "ProShares UltraPro QQQ",            category: etf,       tipo: etf }
+  - { symbol: IWM,    name: "iShares Russell 2000 ETF",          category: etf,       tipo: etf }
+  - { symbol: VOO,    name: "Vanguard S&P 500 ETF",              category: etf,       tipo: etf }
+
+  # Top Megacap / Stocks Nasdaq Relevantes
+  - { symbol: AAPL,   name: "Apple Inc",                         category: tech,      tipo: acciones_usa }
+  - { symbol: MSFT,   name: "Microsoft Corporation",             category: tech,      tipo: acciones_usa }
+  - { symbol: NVDA,   name: "NVIDIA Corporation",                category: tech,      tipo: acciones_usa }
+  - { symbol: TSLA,   name: "Tesla Inc",                         category: auto,      tipo: acciones_usa }
+  - { symbol: META,   name: "Meta Platforms Inc",                category: tech,      tipo: acciones_usa }
+  - { symbol: AMZN,   name: "Amazon.com Inc",                    category: tech,      tipo: acciones_usa }
+  - { symbol: GOOGL,  name: "Alphabet Inc - Class A",            category: tech,      tipo: acciones_usa }
+  - { symbol: AVGO,   name: "Broadcom Inc",                      category: tech,      tipo: acciones_usa }
+  - { symbol: COST,   name: "Costco Wholesale Corp",             category: retail,    tipo: acciones_usa }
+  - { symbol: AMD,    name: "Advanced Micro Devices",            category: tech,      tipo: acciones_usa }
+  - { symbol: NFLX,   name: "Netflix Inc",                       category: tech,      tipo: acciones_usa }
+  - { symbol: JPM,    name: "JP Morgan Chase & Co",              category: financial, tipo: acciones_usa }
+  - { symbol: V,      name: "Visa Inc",                          category: financial, tipo: acciones_usa }
+
+
+# ──────────────────────────────────────────────────────────
+# TIER B — Segundo plano (resto de interés)
+# ──────────────────────────────────────────────────────────
+tier_b:
+
+  # Stocks — Otros Nasdaq / NYSE
+  - { symbol: PEP,    name: "PepsiCo Inc",                       category: consumer,  tipo: acciones_usa }
+  - { symbol: QCOM,   name: "Qualcomm Inc",                      category: tech,      tipo: acciones_usa }
+  - { symbol: UNH,    name: "UnitedHealth Group Inc",            category: health,    tipo: acciones_usa }
+  - { symbol: JNJ,    name: "Johnson & Johnson",                 category: health,    tipo: acciones_usa }
+  - { symbol: MA,     name: "Mastercard Inc",                    category: financial, tipo: acciones_usa }
+  - { symbol: COIN,   name: "Coinbase Global Inc",               category: financial, tipo: acciones_usa }
+  - { symbol: BABA,   name: "Alibaba Group Holding",             category: china,     tipo: acciones_usa }
+
+  # Forex — Minors & Crosses
+  - { symbol: AUDCAD, name: "Australian Dollar vs Canadian",     category: minor,     tipo: forex }
+  - { symbol: AUDCHF, name: "Australian Dollar vs Swiss",        category: minor,     tipo: forex }
+  - { symbol: EURGBP, name: "Euro vs Pound Sterling",             category: minor,     tipo: forex }
+  - { symbol: EURAUD, name: "Euro vs Australian Dollar",         category: minor,     tipo: forex }
+  - { symbol: EURCAD, name: "Euro vs Canadian Dollar",           category: minor,     tipo: forex }
+
+  # Crypto ETF / Proxy
+  - { symbol: GBTC,   name: "Grayscale Bitcoin Trust",           category: crypto,    tipo: crypto }
+  - { symbol: ETHE,   name: "Grayscale Ethereum Trust",          category: crypto,    tipo: crypto }
+  - { symbol: IBIT,   name: "iShares Bitcoin Trust",             category: crypto,    tipo: crypto }
