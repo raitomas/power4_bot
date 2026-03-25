@@ -32,11 +32,13 @@ class AutoTrader:
         self.intervalo_scaneo_seg = config.get("intervalo_scaneo_min", 60) * 60
 
         # Gestores
+        # NOTA: las claves deben coincidir exactamente con settings.yaml (sección "risk").
+        # distancia_sl_min/max están en decimal (0.05 = 5%), igual que RiskManager las espera.
         self.rm = RiskManager(
-            riesgo_pct        = config.get("riesgo_pct", 0.01),
+            riesgo_pct        = config.get("riesgo_pct", 0.005),
             max_posiciones    = config.get("max_posiciones", 5),
-            dist_sl_min_pct   = config.get("dist_sl_min", 1.5),
-            dist_sl_max_pct   = config.get("dist_sl_max", 15.0),
+            dist_sl_min_pct   = config.get("distancia_sl_min", 0.04),
+            dist_sl_max_pct   = config.get("distancia_sl_max", 0.10),
             min_ratio_rr      = config.get("min_rr", 1.5)
         )
         self.om = OrderManager(modo=config.get("modo", "paper"))

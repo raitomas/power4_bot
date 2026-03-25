@@ -95,7 +95,18 @@ def calcular_indicadores(
     df["dist_sma20_pct"] = (
         (df["close"] - df["sma20"]).abs() / df["sma20"] * 100
     ).round(2)
-    df["cerca_sma20"] = df["dist_sma20_pct"] < dist_max_pct
+
+    # "Cerca SMA20" (Regla Barrio Sésamo): se usa ATR para que el umbral se
+    # adapte a la volatilidad real de cada activo.
+    # Un 4% fijo es demasiado permisivo en forex y demasiado estricto en acciones.
+    # Con 1.5× ATR: si el ATR diario es 80 pips (EURUSD), el precio debe estar
+    # dentro de 120 pips del SMA20 para considerarse "cerca".
+    # Fallback al umbral fijo si atr14 no está disponible.
+    if "atr14" in df.columns and df["atr14"].notna().any():
+        dist_abs = (df["close"] - df["sma20"]).abs()
+        df["cerca_sma20"] = dist_abs < (df["atr14"] * 1.5)
+    else:
+        df["cerca_sma20"] = df["dist_sma20_pct"] < dist_max_pct
 
     # ── 6. Clasificación de velas ─────────────────────────────────
     df = _clasificar_velas(df)
@@ -126,16 +137,38 @@ def _calcular_smas(df: pd.DataFrame, r: int, m: int, l: int) -> pd.DataFrame:
     return df
 
 
-def _calcular_pendientes(df: pd.DataFrame) -> pd.DataFrame:
+def _calcular_pendientes(df: pd.DataFrame, n_barras: int = 5) -> pd.DataFrame:
     """
-    Pendiente = SMA[i] - SMA[i-1].
+    Pendiente calculada mediante regresión lineal sobre las últimas N barras.
+
+    Usar 1 sola barra (SMA[i] - SMA[i-1]) es extremadamente ruidoso:
+    una única vela puede hacer que el slope cambie de signo y provoque
+    un cambio de etapa falso. La regresión lineal sobre 5 barras da
+    una pendiente mucho más estable y representativa de la tendencia real.
+
     Positiva → media apunta arriba (alcista)
     Negativa → media apunta abajo (bajista)
     ~0       → media plana (rango)
     """
+    x = np.arange(n_barras, dtype=float)
+
     for col in ["sma20", "sma40", "sma200"]:
-        if col in df.columns:
-            df[f"{col}_slope"] = (df[col] - df[col].shift(1)).round(4)
+        if col not in df.columns:
+            continue
+
+        series = df[col].values
+        slopes = np.full(len(series), np.nan)
+
+        for i in range(n_barras - 1, len(series)):
+            ventana = series[i - n_barras + 1 : i + 1]
+            if np.isnan(ventana).any():
+                continue
+            # Coeficiente de la recta (pendiente = coef[0])
+            coef = np.polyfit(x, ventana, 1)
+            slopes[i] = round(float(coef[0]), 6)
+
+        df[f"{col}_slope"] = slopes
+
     return df
 
 

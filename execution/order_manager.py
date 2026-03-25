@@ -296,18 +296,57 @@ class OrderManager:
             resultado.motivo = "No se pudo obtener precio actual (tick)"
             return resultado
 
+        # Umbral máximo de desviación aceptable: 0.5% del precio de entrada calculado.
+        # Si el mercado superó ese nivel, la señal está caducada y el riesgo calculado
+        # ya no corresponde al SL/TP original → rechazar la orden.
+        MAX_DESVIACION_PCT = 0.005
+
         if orden.direccion == "LONG":
             if precio_entrada <= tick.ask:
-                # El precio ya se alcanzó. Usamos el trade_stops_level del broker + un margen de seguridad
-                # Muchos brokers de Forex requieren al menos 30-50 pips.
+                desviacion = (tick.ask - precio_entrada) / precio_entrada
+                if desviacion > MAX_DESVIACION_PCT:
+                    resultado.motivo = (
+                        f"Señal caducada: precio ya superó la entrada en "
+                        f"{desviacion:.2%} (máx {MAX_DESVIACION_PCT:.1%}). "
+                        f"Entrada={precio_entrada:.4f} Ask={tick.ask:.4f}"
+                    )
+                    logger.warning(
+                        f"[{orden.symbol}] Orden LONG rechazada — señal caducada. "
+                        f"{resultado.motivo}"
+                    )
+                    return resultado
+                # Ajuste menor (<0.5%): solo mover al mínimo técnico del broker
                 min_dist = max(info.trade_stops_level, 30) * info.trade_tick_size
-                precio_entrada = normalizar_precio(tick.ask + min_dist, info.trade_tick_size)
+                precio_entrada_ajustado = normalizar_precio(tick.ask + min_dist, info.trade_tick_size)
+                logger.warning(
+                    f"[{orden.symbol}] Entrada LONG ajustada por tick: "
+                    f"{precio_entrada:.4f} → {precio_entrada_ajustado:.4f} "
+                    f"(desviación {desviacion:.3%})"
+                )
+                precio_entrada = precio_entrada_ajustado
             tipo_orden = mt5.ORDER_TYPE_BUY_STOP
         else:
             if precio_entrada >= tick.bid:
-                # Venta: SELL_STOP debe estar por debajo del Bid
+                desviacion = (precio_entrada - tick.bid) / precio_entrada
+                if desviacion > MAX_DESVIACION_PCT:
+                    resultado.motivo = (
+                        f"Señal caducada: precio ya bajó de la entrada en "
+                        f"{desviacion:.2%} (máx {MAX_DESVIACION_PCT:.1%}). "
+                        f"Entrada={precio_entrada:.4f} Bid={tick.bid:.4f}"
+                    )
+                    logger.warning(
+                        f"[{orden.symbol}] Orden SHORT rechazada — señal caducada. "
+                        f"{resultado.motivo}"
+                    )
+                    return resultado
                 min_dist = max(info.trade_stops_level, 30) * info.trade_tick_size
-                precio_entrada = normalizar_precio(tick.bid - min_dist, info.trade_tick_size)
+                precio_entrada_ajustado = normalizar_precio(tick.bid - min_dist, info.trade_tick_size)
+                logger.warning(
+                    f"[{orden.symbol}] Entrada SHORT ajustada por tick: "
+                    f"{precio_entrada:.4f} → {precio_entrada_ajustado:.4f} "
+                    f"(desviación {desviacion:.3%})"
+                )
+                precio_entrada = precio_entrada_ajustado
             tipo_orden = mt5.ORDER_TYPE_SELL_STOP
 
         # 5. Detectar filling mode (FOK=1, IOC=2 o RETURN=3)

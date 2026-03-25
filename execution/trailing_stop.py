@@ -10,9 +10,8 @@ el Stop Loss según las reglas exactas del método.
 Diagrama de flujo:
   Día 1-2: NO mover (salvo gap o vela excepcional)
   Día 3+:  Evaluar criterio "A Favor"
-           LONG:  Close > Close_prev
-                  AND Low > Low_prev
-                  AND High > High_prev
+           LONG:  Close > Close_prev (obligatorio)
+                  AND (Low > Low_prev OR High > High_prev)
            SHORT: imagen simétrica
   Si "A Favor":
            Ref = min(low[-2], low[-3])  para LONG
@@ -232,12 +231,16 @@ class TrailingStopManager:
         direccion: str,
     ) -> bool:
         """
-        Criterio "A Favor" del Método Power 4:
-        LONG:  Close[n] > Close[n-1]  AND
-               Low[n]   > Low[n-1]    AND
-               High[n]  > High[n-1]
-        SHORT: imagen simétrica (todo invertido)
-        Ambos criterios deben cumplirse SIMULTÁNEAMENTE.
+        Criterio "A Favor" del Método Power 4 (versión mejorada):
+
+        El criterio triple original (Close+Low+High simultáneamente) era
+        excesivamente estricto y rara vez se cumplía en mercados reales,
+        impidiendo que el trailing stop funcionase.
+
+        Versión mejorada: Close (obligatorio) + al menos uno de {Low, High}.
+          LONG:  Close[n] > Close[n-1]  (obligatorio)
+                 Y al menos: Low[n] > Low[n-1]  OR  High[n] > High[n-1]
+          SHORT: imagen simétrica
         """
         if len(df) < 2:
             return False
@@ -247,18 +250,14 @@ class TrailingStopManager:
 
         if direccion == "LONG":
             criterio_precio = float(actual["close"]) > float(anterior["close"])
-            criterio_rango  = (
-                float(actual["low"])  > float(anterior["low"])  and
-                float(actual["high"]) > float(anterior["high"])
-            )
+            criterio_low    = float(actual["low"])   > float(anterior["low"])
+            criterio_high   = float(actual["high"])  > float(anterior["high"])
+            return criterio_precio and (criterio_low or criterio_high)
         else:  # SHORT
             criterio_precio = float(actual["close"]) < float(anterior["close"])
-            criterio_rango  = (
-                float(actual["high"]) < float(anterior["high"]) and
-                float(actual["low"])  < float(anterior["low"])
-            )
-
-        return criterio_precio and criterio_rango
+            criterio_low    = float(actual["low"])   < float(anterior["low"])
+            criterio_high   = float(actual["high"])  < float(anterior["high"])
+            return criterio_precio and (criterio_low or criterio_high)
 
     def _calcular_nuevo_sl(
         self,
