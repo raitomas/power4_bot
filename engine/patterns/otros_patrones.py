@@ -322,32 +322,92 @@ class PRCA(PatronBase):
 
     def detectar(self, df: pd.DataFrame) -> Señal:
         n = len(df); idx = n - 1
-        ventana = df.iloc[max(0, idx - 20) : idx]
-        if len(ventana) < 5: return SEÑAL_VACIA
-        resistencia = float(ventana["high"].max())
+
+        # Zona de consolidación: barras de hace 3 a 35 barras atrás
+        # (excluimos las últimas 2 para no confundir con el breakout actual)
+        zona_start = max(0, idx - 35)
+        zona_end   = max(0, idx - 2)
+        ventana_conso = df.iloc[zona_start:zona_end]
+        if len(ventana_conso) < 7: return SEÑAL_VACIA
+
+        # Resistencia = máximo de la zona de consolidación
+        resistencia = float(ventana_conso["high"].max())
+
+        # Toques reales: barras que probaron la resistencia (dentro del 0.4%)
+        banda_alta = resistencia * 0.996
+        toques = int((ventana_conso["high"] >= banda_alta).sum())
+        if toques < 2: return SEÑAL_VACIA
+
+        # Consolidación mínima: al menos 6 barras con cierre en la zona
+        # (precio pegado a la resistencia, no solo 1-2 picos aislados)
+        zona_conso_pct = resistencia * 0.96   # dentro del 4% de la resistencia
+        barras_en_zona = int((ventana_conso["close"] >= zona_conso_pct).sum())
+        if barras_en_zona < 6: return SEÑAL_VACIA
+
+        # Breakout: precio actual SUPERA la resistencia
         precio_actual = float(df.iloc[idx]["close"])
         if precio_actual <= resistencia: return SEÑAL_VACIA
-        toques = (ventana["high"] >= resistencia * 0.998).sum()
-        if toques < 2: return SEÑAL_VACIA
+
+        # No demasiado extendido: máximo 2.5% por encima de la resistencia
+        extension = (precio_actual - resistencia) / resistencia
+        if extension > 0.025: return SEÑAL_VACIA
+
         precio_entrada = round(resistencia * (1 + self.BUFFER_ENTRADA_PCT), 4)
-        return Señal(detectado=True, precio_entrada=precio_entrada, idx_vela=idx,
-                     razon=f"PRCA: ruptura de resistencia {resistencia:.4f} ({toques} toques).",
-                     datos_extra={"resistencia": resistencia, "toques": int(toques)})
+        return Señal(
+            detectado      = True,
+            precio_entrada = precio_entrada,
+            idx_vela       = idx,
+            razon          = (
+                f"PRCA: ruptura de resistencia {resistencia:.4f} "
+                f"({toques} toques, {barras_en_zona} barras conso, "
+                f"+{extension:.1%} sobre nivel)."
+            ),
+            datos_extra={
+                "resistencia":  resistencia,
+                "toques":       toques,
+                "barras_conso": barras_en_zona,
+            }
+        )
 
     def detectar_prepatron(self, df: pd.DataFrame) -> Optional[Señal]:
-        """Pre-patrón PRCA: Consolidación bajo resistencia."""
+        """Pre-patrón PRCA: consolidación formada bajo resistencia, breakout pendiente."""
         n = len(df); idx = n - 1
-        ventana = df.iloc[max(0, idx - 20) : idx + 1]
-        if len(ventana) < 5: return None
-        resistencia = float(ventana["high"].max())
+
+        zona_start = max(0, idx - 35)
+        ventana_conso = df.iloc[zona_start : idx + 1]
+        if len(ventana_conso) < 7: return None
+
+        resistencia = float(ventana_conso["high"].max())
+        banda_alta  = resistencia * 0.996
+        toques = int((ventana_conso["high"] >= banda_alta).sum())
+        if toques < 2: return None
+
+        zona_conso_pct  = resistencia * 0.96
+        barras_en_zona  = int((ventana_conso["close"] >= zona_conso_pct).sum())
+        if barras_en_zona < 6: return None
+
+        # Pre-patrón: precio AÚN por debajo de la resistencia
         precio_actual = float(df.iloc[idx]["close"])
         if precio_actual >= resistencia: return None
-        toques = (ventana["high"] >= resistencia * 0.998).sum()
-        if toques < 2: return None
+
         nv = round(resistencia * (1 + self.BUFFER_ENTRADA_PCT), 4)
-        return Señal(detectado=True, precio_entrada=nv, nivel_activacion=nv, modo_entrada="condicional",
-                     idx_vela=idx, razon=f"PRCA PRE: Bajo resistencia en {resistencia:.4f} ({toques} toques).",
-                     datos_extra={"resistencia": resistencia, "toques": int(toques)})
+        return Señal(
+            detectado        = True,
+            precio_entrada   = nv,
+            nivel_activacion = nv,
+            modo_entrada     = "condicional",
+            pendiente_expira = 3,
+            idx_vela         = idx,
+            razon            = (
+                f"PRCA PRE: consolidación bajo {resistencia:.4f} "
+                f"({toques} toques, {barras_en_zona} barras)."
+            ),
+            datos_extra={
+                "resistencia":  resistencia,
+                "toques":       toques,
+                "barras_conso": barras_en_zona,
+            }
+        )
 
 
 class PRCB(PatronBase):
@@ -361,32 +421,88 @@ class PRCB(PatronBase):
 
     def detectar(self, df: pd.DataFrame) -> Señal:
         n = len(df); idx = n - 1
-        ventana = df.iloc[max(0, idx - 20) : idx]
-        if len(ventana) < 5: return SEÑAL_VACIA
-        soporte = float(ventana["low"].min())
+
+        zona_start = max(0, idx - 35)
+        zona_end   = max(0, idx - 2)
+        ventana_conso = df.iloc[zona_start:zona_end]
+        if len(ventana_conso) < 7: return SEÑAL_VACIA
+
+        # Soporte = mínimo de la zona de consolidación
+        soporte = float(ventana_conso["low"].min())
+
+        # Toques reales al soporte (dentro del 0.4%)
+        banda_baja = soporte * 1.004
+        toques = int((ventana_conso["low"] <= banda_baja).sum())
+        if toques < 2: return SEÑAL_VACIA
+
+        # Consolidación mínima
+        zona_conso_pct = soporte * 1.04
+        barras_en_zona = int((ventana_conso["close"] <= zona_conso_pct).sum())
+        if barras_en_zona < 6: return SEÑAL_VACIA
+
+        # Ruptura: precio actual PERFORA el soporte
         precio_actual = float(df.iloc[idx]["close"])
         if precio_actual >= soporte: return SEÑAL_VACIA
-        toques = (ventana["low"] <= soporte * 1.002).sum()
-        if toques < 2: return SEÑAL_VACIA
+
+        # No demasiado extendido: máximo 2.5% por debajo
+        extension = (soporte - precio_actual) / soporte
+        if extension > 0.025: return SEÑAL_VACIA
+
         precio_entrada = round(soporte * (1 - self.BUFFER_ENTRADA_PCT), 4)
-        return Señal(detectado=True, precio_entrada=precio_entrada, idx_vela=idx,
-                     razon=f"PRCB: ruptura de soporte {soporte:.4f} ({toques} toques). Close={precio_actual:.4f}.",
-                     datos_extra={"soporte": soporte, "toques": int(toques)})
+        return Señal(
+            detectado      = True,
+            precio_entrada = precio_entrada,
+            idx_vela       = idx,
+            razon          = (
+                f"PRCB: ruptura de soporte {soporte:.4f} "
+                f"({toques} toques, {barras_en_zona} barras conso, "
+                f"-{extension:.1%} bajo nivel)."
+            ),
+            datos_extra={
+                "soporte":      soporte,
+                "toques":       toques,
+                "barras_conso": barras_en_zona,
+            }
+        )
 
     def detectar_prepatron(self, df: pd.DataFrame) -> Optional[Señal]:
-        """Pre-patrón PRCB: Consolidación sobre soporte."""
+        """Pre-patrón PRCB: consolidación formada sobre soporte, ruptura pendiente."""
         n = len(df); idx = n - 1
-        ventana = df.iloc[max(0, idx - 20) : idx + 1]
-        if len(ventana) < 5: return None
-        soporte = float(ventana["low"].min())
+
+        zona_start = max(0, idx - 35)
+        ventana_conso = df.iloc[zona_start : idx + 1]
+        if len(ventana_conso) < 7: return None
+
+        soporte = float(ventana_conso["low"].min())
+        banda_baja = soporte * 1.004
+        toques = int((ventana_conso["low"] <= banda_baja).sum())
+        if toques < 2: return None
+
+        zona_conso_pct = soporte * 1.04
+        barras_en_zona = int((ventana_conso["close"] <= zona_conso_pct).sum())
+        if barras_en_zona < 6: return None
+
         precio_actual = float(df.iloc[idx]["close"])
         if precio_actual <= soporte: return None
-        toques = (ventana["low"] <= soporte * 1.002).sum()
-        if toques < 2: return None
+
         nv = round(soporte * (1 - self.BUFFER_ENTRADA_PCT), 4)
-        return Señal(detectado=True, precio_entrada=nv, nivel_activacion=nv, modo_entrada="condicional",
-                     idx_vela=idx, razon=f"PRCB PRE: Sobre soporte en {soporte:.4f} ({toques} toques).",
-                     datos_extra={"soporte": soporte, "toques": int(toques)})
+        return Señal(
+            detectado        = True,
+            precio_entrada   = nv,
+            nivel_activacion = nv,
+            modo_entrada     = "condicional",
+            pendiente_expira = 3,
+            idx_vela         = idx,
+            razon            = (
+                f"PRCB PRE: consolidación sobre {soporte:.4f} "
+                f"({toques} toques, {barras_en_zona} barras)."
+            ),
+            datos_extra={
+                "soporte":      soporte,
+                "toques":       toques,
+                "barras_conso": barras_en_zona,
+            }
+        )
 
 
 # ══════════════════════════════════════════════════════════════════

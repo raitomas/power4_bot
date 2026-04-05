@@ -11,7 +11,7 @@ de gestión de riesgo.
 import logging
 import time
 import threading
-from datetime import datetime
+from datetime import datetime, date
 from typing import Dict, List, Optional
 
 from core.symbols import get_active_symbols
@@ -30,6 +30,8 @@ class AutoTrader:
         self.running = False
         self.thread = None
         self.intervalo_scaneo_seg = config.get("intervalo_scaneo_min", 60) * 60
+        self.hora_escaneo = config.get("hora_escaneo", "21:30")  # HH:MM
+        self._ejecutado_hoy: Optional[date] = None
 
         # Gestores
         # NOTA: las claves deben coincidir exactamente con settings.yaml (sección "risk").
@@ -68,17 +70,22 @@ class AutoTrader:
         logger.info("🤖 Modo Automático DETENIDO")
 
     def _bucle_principal(self):
-        """Bucle que ejecuta el ciclo cada cierto tiempo."""
+        """Bucle que comprueba cada minuto si es la hora de escaneo diario."""
+        from datetime import date as date_type
         while self.running:
             try:
-                self.ejecutar_ciclo()
+                ahora = datetime.now()
+                hora_objetivo = datetime.strptime(self.hora_escaneo, "%H:%M").time()
+                es_hora = ahora.time().hour == hora_objetivo.hour and ahora.time().minute == hora_objetivo.minute
+                hoy = ahora.date()
+
+                if es_hora and self._ejecutado_hoy != hoy:
+                    self._ejecutado_hoy = hoy
+                    self.ejecutar_ciclo()
             except Exception as e:
-                logger.exception(f"Error crítico en ciclo de autotrading: {e}")
-            
-            # Esperar al siguiente intervalo o a que se detenga
-            for _ in range(self.intervalo_scaneo_seg):
-                if not self.running: break
-                time.sleep(1)
+                logger.exception(f"Error en bucle principal: {e}")
+
+            time.sleep(60)  # Comprueba cada minuto
 
     def ejecutar_ciclo(self):
         """Ejecuta una pasada completa: descarga → análisis → ejecución."""
@@ -140,55 +147,58 @@ class AutoTrader:
         # 3. Gestionar pendientes expiradas antes de añadir nuevas
         self._gestionar_pendientes()
 
-        # 4. Ejecución
+        # 4. Ejecución — asignar expira por defecto a señales sin valor
+        for s in señales:
+            if s.pendiente_expira == 0:
+                s.pendiente_expira = 2
+
+        # Todas las señales → orden pendiente BUY_STOP_LIMIT / SELL_STOP_LIMIT
+        # El patrón está estructuralmente completo; la confirmación = mercado toca el nivel
         for s in señales:
             if not self.running:
                 break
             if self._ya_operado_hoy(s):
                 continue
 
-            df_s  = datos_d1.get(s.symbol)
+            df_s = datos_d1.get(s.symbol)
             orden = self.rm.calcular_orden(s, df_s)
 
             if not (orden and orden.valida):
                 continue
 
-            if s.es_condicional():
-                # ── Orden condicional: BUY_STOP / SELL_STOP ───────────
-                if self._ya_tiene_pendiente(s.symbol, s.patron):
-                    continue   # Ya hay una pendiente activa para este patrón
-                logger.info(f"⏳ CONDICIONAL: {s.symbol} {s.patron} | "
-                            f"Nivel={s.nivel_activacion:.4f}")
-                resultado = self.om.enviar_orden(orden)
-                if resultado.enviada:
-                    from datetime import timedelta
-                    expira = datetime.now() + timedelta(days=s.pendiente_expira)
-                    self.pendientes_activas[resultado.ticket] = {
-                        "señal":   s,
-                        "expira":  expira,
-                        "symbol":  s.symbol,
-                        "patron":  s.patron,
-                    }
-                tipo_str = "CONDICIONAL"
-            else:
-                # ── Orden confirmada: entrada inmediata ───────────────
-                logger.info(f"🚀 CONFIRMADA: {s.symbol} {s.patron} | Ejecutando...")
-                resultado = self.om.enviar_orden(orden)
-                tipo_str = "CONFIRMADA"
+            if self._ya_tiene_pendiente(s.symbol, s.patron):
+                continue
+
+            logger.info(
+                f"📋 ORDEN PENDIENTE: {s.symbol} [{s.patron}] {s.direccion} | "
+                f"Nivel={s.precio_entrada:.4f} | Expira en {s.pendiente_expira} día(s)"
+            )
+
+            resultado = self.om.enviar_orden(orden)
+
+            if resultado.enviada:
+                from datetime import timedelta
+                expira = datetime.now() + timedelta(days=s.pendiente_expira)
+                self.pendientes_activas[resultado.ticket] = {
+                    "señal":  s,
+                    "expira": expira,
+                    "symbol": s.symbol,
+                    "patron": s.patron,
+                }
 
             self.operaciones_auto.append({
                 "fecha":     datetime.now().strftime("%Y-%m-%d %H:%M"),
                 "symbol":    s.symbol,
                 "patron":    s.patron,
                 "direccion": s.direccion,
-                "tipo":      tipo_str,
+                "tipo":      "STOP_LIMIT_PENDIENTE",
                 "enviada":   resultado.enviada,
                 "ticket":    resultado.ticket,
                 "motivo":    resultado.motivo,
-                "volumen":   resultado.volumen_real if resultado.enviada else orden.volumen
+                "volumen":   resultado.volumen_real if resultado.enviada else orden.volumen,
             })
 
-        logger.info("✓ Escaneo automático completado.")
+        logger.info("Escaneo automatico completado.")
 
     def _gestionar_pendientes(self):
         """

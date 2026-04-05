@@ -279,24 +279,25 @@ def _encontrar_escalera_decreciente(
 ) -> list:
     """
     A partir del swing high en `inicio`, encuentra la secuencia
-    de velas donde cada máximo es menor que el anterior
-    (escalera descendente de máximos = inhalación en PC1).
+    de velas donde cada máximo es ESTRICTAMENTE menor que el anterior
+    confirmado (escalera descendente de máximos = inhalación en PC1).
 
     Returns: lista de índices que forman la escalera
     """
-    escalones = []
-    prev_high = highs[inicio]
+    escalones  = []
+    prev_high  = highs[inicio]
 
     for i in range(inicio + 1, fin):
         if highs[i] < prev_high:
+            # Nuevo máximo más bajo → avanza la escalera
             escalones.append(i)
             prev_high = highs[i]
-        else:
-            # Si rompe la estructura, reiniciar desde aquí
-            if highs[i] > highs[inicio]:
-                # Nuevo máximo mayor que el inicio → no es inhalación válida
-                escalones = []
+        elif highs[i] > highs[inicio] * 1.002:
+            # Nuevo máximo supera el swing inicial → patrón inválido
+            escalones = []
             prev_high = highs[i]
+        # else: bar intermedia entre prev_high y highs[inicio]
+        # No avanza ni rompe → se ignora sin cambiar prev_high
 
     return escalones
 
@@ -308,21 +309,24 @@ def _encontrar_escalera_creciente(
 ) -> list:
     """
     A partir del swing low en `inicio`, encuentra la secuencia
-    de velas donde cada mínimo es mayor que el anterior
-    (escalera ascendente de mínimos = inhalación en PV1).
+    de velas donde cada mínimo es ESTRICTAMENTE mayor que el anterior
+    confirmado (escalera ascendente de mínimos = inhalación en PV1).
 
     Returns: lista de índices que forman la escalera
     """
-    escalones = []
-    prev_low = lows[inicio]
+    escalones  = []
+    prev_low   = lows[inicio]
 
     for i in range(inicio + 1, fin):
         if lows[i] > prev_low:
+            # Nuevo mínimo más alto → avanza la escalera
             escalones.append(i)
             prev_low = lows[i]
-        else:
-            if lows[i] < lows[inicio]:
-                escalones = []
-            prev_low = lows[i]
+        elif lows[i] < lows[inicio] * 0.998:
+            # Rompe claramente por debajo del swing inicial → patrón inválido
+            escalones = []
+            prev_low  = lows[i]
+        # else: bar intermedia entre prev_low y lows[inicio]
+        # No avanza ni rompe → se ignora sin cambiar prev_low
 
     return escalones

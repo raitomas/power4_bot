@@ -22,7 +22,10 @@ import pandas as pd
 from engine.stage_classifier import ResultadoAlineamiento, Etapa
 from engine.patterns.base import Señal, SEÑAL_VACIA
 from engine.patterns.pc1_pv1 import PC1, PV1
-from engine.patterns.patron_123 import Patron123Alcista, Patron123Bajista
+from engine.patterns.patron_123 import (
+    Patron123Alcista, Patron123Bajista,
+    Patron1234Alcista, Patron1234Bajista,
+)
 from engine.patterns.acunamiento import AcunamientoAlcista, AcunamientoBajista
 from engine.patterns.otros_patrones import (
     FalloRupturaBajista, FalloRupturaAlcista,
@@ -40,6 +43,7 @@ logger = logging.getLogger(__name__)
 PATRONES_LONG = [
     (PC1,                  True),
     (Patron123Alcista,     True),
+    (Patron1234Alcista,    True),
     (AcunamientoAlcista,   False), # Opera sobre la SMA20
     (PRCA,                 True),
     (FalloRupturaBajista,  False), # Opera en exhalación
@@ -52,6 +56,7 @@ PATRONES_LONG = [
 PATRONES_SHORT = [
     (PV1,                  True),
     (Patron123Bajista,     True),
+    (Patron1234Bajista,    True),
     (AcunamientoBajista,   False),
     (PRCB,                 True),
     (FalloRupturaAlcista,  False),

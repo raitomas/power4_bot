@@ -5,8 +5,8 @@ Envía órdenes pendientes a MetaTrader 5 y
 gestiona las posiciones abiertas.
 
 Tipos de orden usados:
-  BUY_STOP  → Para señales LONG  (PC1, 1-2-3 alc, etc.)
-  SELL_STOP → Para señales SHORT (PV1, 1-2-3 baj, etc.)
+  BUY_STOP_LIMIT  → Para señales LONG  (PC1, 1-2-3 alc, etc.)
+  SELL_STOP_LIMIT → Para señales SHORT (PV1, 1-2-3 baj, etc.)
 
 Flujo por señal:
   1. Construir request MT5
@@ -35,6 +35,7 @@ except ImportError:
 # Magic number único del bot (identifica todas las órdenes)
 MAGIC_NUMBER  = 20240001
 COMMENT_PREFIX = "P4"   # Prefijo en comentario de orden
+LIMIT_BUFFER_PCT = 0.003   # 0.3% de margen entre stop y limit
 
 
 @dataclass
@@ -324,7 +325,8 @@ class OrderManager:
                     f"(desviación {desviacion:.3%})"
                 )
                 precio_entrada = precio_entrada_ajustado
-            tipo_orden = mt5.ORDER_TYPE_BUY_STOP
+            tipo_orden = mt5.ORDER_TYPE_BUY_STOP_LIMIT
+            precio_limit = normalizar_precio(precio_entrada * (1 + LIMIT_BUFFER_PCT), info.trade_tick_size)
         else:
             if precio_entrada >= tick.bid:
                 desviacion = (precio_entrada - tick.bid) / precio_entrada
@@ -347,7 +349,8 @@ class OrderManager:
                     f"(desviación {desviacion:.3%})"
                 )
                 precio_entrada = precio_entrada_ajustado
-            tipo_orden = mt5.ORDER_TYPE_SELL_STOP
+            tipo_orden = mt5.ORDER_TYPE_SELL_STOP_LIMIT
+            precio_limit = normalizar_precio(precio_entrada * (1 - LIMIT_BUFFER_PCT), info.trade_tick_size)
 
         # 5. Detectar filling mode (FOK=1, IOC=2 o RETURN=3)
         # Algunos brokers no tienen las constantes expuestas en el módulo mt5 de Python (AttributeError)
@@ -363,17 +366,18 @@ class OrderManager:
             filling = mt5.ORDER_FILLING_RETURN
 
         request = {
-            "action":   mt5.TRADE_ACTION_PENDING,
-            "symbol":   orden.symbol,
-            "volume":   float(volumen_final),
-            "type":     tipo_orden,
-            "price":    float(precio_entrada),
-            "sl":       float(sl),
-            "tp":       float(tp),
-            "magic":    self.magic,
-            "comment":  f"{COMMENT_PREFIX}_{orden.patron}",
-            "type_time":mt5.ORDER_TIME_GTC,
-            "type_filling": filling,
+            "action":        mt5.TRADE_ACTION_PENDING,
+            "symbol":        orden.symbol,
+            "volume":        float(volumen_final),
+            "type":          tipo_orden,
+            "price":         float(precio_entrada),
+            "price_stoplimit": float(precio_limit),
+            "sl":            float(sl),
+            "tp":            float(tp),
+            "magic":         self.magic,
+            "comment":       f"{COMMENT_PREFIX}_{orden.patron}",
+            "type_time":     mt5.ORDER_TIME_GTC,
+            "type_filling":  filling,
         }
 
         # Validar
@@ -444,7 +448,8 @@ class OrderManager:
             f"[{orden.patron}] ticket={ticket} "
             f"entrada={orden.precio_entrada:.4f} "
             f"SL={orden.stop_loss:.4f} TP={orden.take_profit:.4f} "
-            f"vol={orden.volumen} riesgo=${orden.riesgo_dolares:.0f}"
+            f"vol={orden.volumen} riesgo=${orden.riesgo_dolares:.0f} "
+            f"modo: STOP_LIMIT"
         )
 
         self._ordenes_enviadas.append(resultado)
