@@ -349,3 +349,296 @@ class Patron123Bajista(PatronBase):
                 "nivel_trigger": nivel_trigger,
             }
         )
+
+
+class Patron1234Alcista(PatronBase):
+    """
+    Patrón 1-2-3-4 Alcista — LONG en Etapa 2.
+    Variante del 1-2-3 con DOS velas de consolidación.
+    V1: Gran vela verde (percentil 80)
+    V2+V3: Dos velas de pausa que juntas no retroceden más del 40% de V1
+    Trigger: superar max(High_V1, High_V2, High_V3)
+    """
+    nombre    = "1234_ALC"
+    direccion = "LONG"
+
+    def detectar(self, df: pd.DataFrame) -> Señal:
+        if len(df) < LOOKBACK_PERCENTIL + 4:
+            return SEÑAL_VACIA
+
+        n   = len(df)
+        idx = n - 1
+
+        for offset in range(2, 6):
+            idx_v1      = idx - offset
+            idx_v2      = idx_v1 + 1
+            idx_v3      = idx_v1 + 2
+            idx_trigger = idx
+
+            if idx_v1 < LOOKBACK_PERCENTIL:
+                break
+
+            señal = self._evaluar_1234(df, idx_v1, idx_v2, idx_v3, idx_trigger)
+            if señal.detectado:
+                return señal
+
+        return SEÑAL_VACIA
+
+    def _evaluar_1234(self, df, idx_v1, idx_v2, idx_v3, idx_trigger) -> Señal:
+        v1 = df.iloc[idx_v1]
+        v2 = df.iloc[idx_v2]
+        v3 = df.iloc[idx_v3]
+        vt = df.iloc[idx_trigger]
+
+        body_v1 = float(v1["close"]) - float(v1["open"])
+        if body_v1 <= 0:
+            return SEÑAL_VACIA
+
+        cuerpos_previos = (
+            df["close"].iloc[idx_v1 - LOOKBACK_PERCENTIL : idx_v1]
+            - df["open"].iloc[idx_v1 - LOOKBACK_PERCENTIL : idx_v1]
+        ).abs()
+        if len(cuerpos_previos) == 0:
+            return SEÑAL_VACIA
+
+        percentil_80 = np.percentile(cuerpos_previos, MIN_BODY_PERCENTIL)
+        if body_v1 < percentil_80:
+            return SEÑAL_VACIA
+
+        high_v1 = float(v1["high"])
+        low_v2  = float(v2["low"])
+        low_v3  = float(v3["low"])
+        high_v2 = float(v2["high"])
+        high_v3 = float(v3["high"])
+
+        # Retroceso conjunto de V2+V3: el mínimo entre ambas no baja más del 40% de V1
+        retroceso = (high_v1 - min(low_v2, low_v3)) / body_v1 if body_v1 > 0 else 1.0
+        if retroceso > 0.40:
+            return SEÑAL_VACIA
+
+        # Ni V2 ni V3 superan el máximo de V1
+        if high_v2 > high_v1 * 1.002 or high_v3 > high_v1 * 1.002:
+            return SEÑAL_VACIA
+
+        nivel_trigger = max(high_v1, high_v2, high_v3)
+        precio_actual = float(vt["close"])
+
+        if precio_actual <= nivel_trigger:
+            return SEÑAL_VACIA
+
+        precio_entrada = round(nivel_trigger * (1 + self.BUFFER_ENTRADA_PCT), 4)
+
+        return Señal(
+            detectado      = True,
+            precio_entrada = precio_entrada,
+            idx_vela       = idx_trigger,
+            razon          = (
+                f"1234_ALC: V1 body={body_v1:.4f} (P80={percentil_80:.4f}), "
+                f"retroceso conjunto V2+V3={retroceso:.1%}. "
+                f"Trigger: {nivel_trigger:.4f} superado."
+            ),
+            datos_extra = {
+                "idx_v1": idx_v1, "idx_v2": idx_v2, "idx_v3": idx_v3,
+                "body_v1": body_v1, "retroceso": retroceso,
+                "nivel_trigger": nivel_trigger,
+            }
+        )
+
+    def detectar_prepatron(self, df: pd.DataFrame) -> "Señal | None":
+        if len(df) < LOOKBACK_PERCENTIL + 3:
+            return None
+        n = len(df)
+        idx_v3 = n - 1
+        idx_v2 = idx_v3 - 1
+        idx_v1 = idx_v3 - 2
+
+        v1 = df.iloc[idx_v1]
+        v2 = df.iloc[idx_v2]
+        v3 = df.iloc[idx_v3]
+
+        body_v1 = float(v1["close"]) - float(v1["open"])
+        if body_v1 <= 0: return None
+
+        cuerpos_previos = (
+            df["close"].iloc[idx_v1 - LOOKBACK_PERCENTIL : idx_v1]
+            - df["open"].iloc[idx_v1 - LOOKBACK_PERCENTIL : idx_v1]
+        ).abs()
+        if len(cuerpos_previos) == 0: return None
+
+        percentil_80 = np.percentile(cuerpos_previos, MIN_BODY_PERCENTIL)
+        if body_v1 < percentil_80: return None
+
+        high_v1 = float(v1["high"])
+        low_v2  = float(v2["low"])
+        low_v3  = float(v3["low"])
+        high_v2 = float(v2["high"])
+        high_v3 = float(v3["high"])
+
+        retroceso = (high_v1 - min(low_v2, low_v3)) / body_v1 if body_v1 > 0 else 1.0
+        if retroceso > 0.40: return None
+        if high_v2 > high_v1 * 1.002 or high_v3 > high_v1 * 1.002: return None
+
+        nivel_trigger = max(high_v1, high_v2, high_v3)
+        precio_actual = float(v3["close"])
+
+        if precio_actual >= nivel_trigger: return None
+
+        nivel_activacion = round(nivel_trigger * (1 + self.BUFFER_ENTRADA_PCT), 4)
+
+        return Señal(
+            detectado        = True,
+            precio_entrada   = nivel_activacion,
+            nivel_activacion = nivel_activacion,
+            modo_entrada     = "condicional",
+            pendiente_expira = 2,
+            idx_vela         = idx_v3,
+            razon            = (
+                f"1234_ALC PRE: V1+V2+V3 formadas. "
+                f"BUY_STOP_LIMIT en {nivel_activacion:.4f}."
+            ),
+            datos_extra={"nivel_trigger": nivel_trigger}
+        )
+
+
+class Patron1234Bajista(PatronBase):
+    """
+    Patrón 1-2-3-4 Bajista — SHORT en Etapa 4.
+    Espejo del alcista con dos velas de consolidación.
+    """
+    nombre    = "1234_BAJ"
+    direccion = "SHORT"
+
+    def detectar(self, df: pd.DataFrame) -> Señal:
+        if len(df) < LOOKBACK_PERCENTIL + 4:
+            return SEÑAL_VACIA
+
+        n   = len(df)
+        idx = n - 1
+
+        for offset in range(2, 6):
+            idx_v1      = idx - offset
+            idx_v2      = idx_v1 + 1
+            idx_v3      = idx_v1 + 2
+            idx_trigger = idx
+
+            if idx_v1 < LOOKBACK_PERCENTIL:
+                break
+
+            señal = self._evaluar_1234_baj(df, idx_v1, idx_v2, idx_v3, idx_trigger)
+            if señal.detectado:
+                return señal
+
+        return SEÑAL_VACIA
+
+    def _evaluar_1234_baj(self, df, idx_v1, idx_v2, idx_v3, idx_trigger) -> Señal:
+        v1 = df.iloc[idx_v1]
+        v2 = df.iloc[idx_v2]
+        v3 = df.iloc[idx_v3]
+        vt = df.iloc[idx_trigger]
+
+        body_v1 = float(v1["open"]) - float(v1["close"])
+        if body_v1 <= 0:
+            return SEÑAL_VACIA
+
+        cuerpos_previos = (
+            df["close"].iloc[idx_v1 - LOOKBACK_PERCENTIL : idx_v1]
+            - df["open"].iloc[idx_v1 - LOOKBACK_PERCENTIL : idx_v1]
+        ).abs()
+        if len(cuerpos_previos) == 0:
+            return SEÑAL_VACIA
+
+        percentil_80 = np.percentile(cuerpos_previos, MIN_BODY_PERCENTIL)
+        if body_v1 < percentil_80:
+            return SEÑAL_VACIA
+
+        low_v1  = float(v1["low"])
+        high_v2 = float(v2["high"])
+        high_v3 = float(v3["high"])
+        low_v2  = float(v2["low"])
+        low_v3  = float(v3["low"])
+
+        retroceso = (max(high_v2, high_v3) - low_v1) / body_v1 if body_v1 > 0 else 1.0
+        if retroceso > 0.40:
+            return SEÑAL_VACIA
+
+        if low_v2 < low_v1 * 0.998 or low_v3 < low_v1 * 0.998:
+            return SEÑAL_VACIA
+
+        nivel_trigger = min(low_v1, low_v2, low_v3)
+        precio_actual = float(vt["close"])
+
+        if precio_actual >= nivel_trigger:
+            return SEÑAL_VACIA
+
+        precio_entrada = round(nivel_trigger * (1 - self.BUFFER_ENTRADA_PCT), 4)
+
+        return Señal(
+            detectado      = True,
+            precio_entrada = precio_entrada,
+            idx_vela       = idx_trigger,
+            razon          = (
+                f"1234_BAJ: V1 body={body_v1:.4f} (P80={percentil_80:.4f}), "
+                f"retroceso conjunto={retroceso:.1%}. "
+                f"Trigger: {nivel_trigger:.4f} perforado."
+            ),
+            datos_extra = {
+                "idx_v1": idx_v1, "idx_v2": idx_v2, "idx_v3": idx_v3,
+                "body_v1": body_v1, "retroceso": retroceso,
+                "nivel_trigger": nivel_trigger,
+            }
+        )
+
+    def detectar_prepatron(self, df: pd.DataFrame) -> "Señal | None":
+        if len(df) < LOOKBACK_PERCENTIL + 3:
+            return None
+        n = len(df)
+        idx_v3 = n - 1
+        idx_v2 = idx_v3 - 1
+        idx_v1 = idx_v3 - 2
+
+        v1 = df.iloc[idx_v1]
+        v2 = df.iloc[idx_v2]
+        v3 = df.iloc[idx_v3]
+
+        body_v1 = float(v1["open"]) - float(v1["close"])
+        if body_v1 <= 0: return None
+
+        cuerpos_previos = (
+            df["close"].iloc[idx_v1 - LOOKBACK_PERCENTIL : idx_v1]
+            - df["open"].iloc[idx_v1 - LOOKBACK_PERCENTIL : idx_v1]
+        ).abs()
+        if len(cuerpos_previos) == 0: return None
+
+        percentil_80 = np.percentile(cuerpos_previos, MIN_BODY_PERCENTIL)
+        if body_v1 < percentil_80: return None
+
+        low_v1  = float(v1["low"])
+        high_v2 = float(v2["high"])
+        high_v3 = float(v3["high"])
+        low_v2  = float(v2["low"])
+        low_v3  = float(v3["low"])
+
+        retroceso = (max(high_v2, high_v3) - low_v1) / body_v1 if body_v1 > 0 else 1.0
+        if retroceso > 0.40: return None
+        if low_v2 < low_v1 * 0.998 or low_v3 < low_v1 * 0.998: return None
+
+        nivel_trigger = min(low_v1, low_v2, low_v3)
+        precio_actual = float(v3["close"])
+
+        if precio_actual <= nivel_trigger: return None
+
+        nivel_activacion = round(nivel_trigger * (1 - self.BUFFER_ENTRADA_PCT), 4)
+
+        return Señal(
+            detectado        = True,
+            precio_entrada   = nivel_activacion,
+            nivel_activacion = nivel_activacion,
+            modo_entrada     = "condicional",
+            pendiente_expira = 2,
+            idx_vela         = idx_v3,
+            razon            = (
+                f"1234_BAJ PRE: V1+V2+V3 formadas. "
+                f"SELL_STOP_LIMIT en {nivel_activacion:.4f}."
+            ),
+            datos_extra={"nivel_trigger": nivel_trigger}
+        )
